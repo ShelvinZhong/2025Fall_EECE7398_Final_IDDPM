@@ -1,6 +1,7 @@
 from PIL import Image
 import blobfile as bf
-from mpi4py import MPI
+# from mpi4py import MPI
+
 import numpy as np
 from torch.utils.data import DataLoader, Dataset
 
@@ -38,16 +39,16 @@ def load_data(
         image_size,
         all_files,
         classes=classes,
-        shard=MPI.COMM_WORLD.Get_rank(),
-        num_shards=MPI.COMM_WORLD.Get_size(),
+        shard = 0,
+        num_shards = 1,
     )
     if deterministic:
         loader = DataLoader(
-            dataset, batch_size=batch_size, shuffle=False, num_workers=1, drop_last=True
+            dataset, batch_size=batch_size, shuffle=False, num_workers=8, drop_last=True
         )
     else:
         loader = DataLoader(
-            dataset, batch_size=batch_size, shuffle=True, num_workers=1, drop_last=True
+            dataset, batch_size=batch_size, shuffle=True, num_workers=8, drop_last=True
         )
     while True:
         yield from loader
@@ -104,3 +105,20 @@ class ImageDataset(Dataset):
         if self.local_classes is not None:
             out_dict["y"] = np.array(self.local_classes[idx], dtype=np.int64)
         return np.transpose(arr, [2, 0, 1]), out_dict
+
+class PairedSRDataset(Dataset):
+    def __init__(self, hr_dir, lr_dir, hr_size, lr_size):
+        hr_files = _list_image_files_recursively(hr_dir)
+        lr_files = _list_image_files_recursively(lr_dir)
+        assert len(hr_files) == len(lr_files), "HR / LR not equal"
+
+        self.hr_dataset = ImageDataset(hr_size, hr_files, classes=None, shard=0, num_shards=1)
+        self.lr_dataset = ImageDataset(lr_size, lr_files, classes=None, shard=0, num_shards=1)
+
+    def __len__(self):
+        return len(self.hr_dataset)
+
+    def __getitem__(self, idx):
+        hr, _ = self.hr_dataset[idx]         
+        lr, _ = self.lr_dataset[idx]         
+        return hr, {"low_res": lr}

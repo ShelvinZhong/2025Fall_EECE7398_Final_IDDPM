@@ -545,3 +545,196 @@ class SuperResModel(UNetModel):
         x = th.cat([x, upsampled], dim=1)
         return super().get_feature_vectors(x, timesteps, **kwargs)
 
+class PixelShuffleUpsampler(nn.Module):
+    def __init__(self, in_channels, out_channels, scale_factor):
+        super().__init__()
+        self.scale_factor = scale_factor
+        hidden_channels = out_channels * (scale_factor ** 2)
+        self.net = nn.Sequential(
+            conv_nd(2, in_channels, hidden_channels, 3, padding=1),
+            SiLU(),
+            nn.PixelShuffle(scale_factor),
+        )
+        self.init_weights()
+
+    def init_weights(self):
+        for m in self.modules():
+            if isinstance(m, nn.Conv2d):
+                nn.init.xavier_normal_(m.weight, gain=0.1)
+                if m.bias is not None:
+                    nn.init.zeros_(m.bias)
+
+    def forward(self, x):
+        base = F.interpolate(
+            x,
+            scale_factor=self.scale_factor,
+            mode="bicubic",
+            align_corners=False,
+        )
+        detail = self.net(x)
+        out = base + detail
+        return out.clamp(-1, 1)
+
+
+class SFTLayer(nn.Module):
+    def __init__(self, channels, cond_channels):
+        super().__init__()
+        self.norm = normalization(channels)
+        self.conv = nn.Sequential(
+            nn.SiLU(),
+            conv_nd(2, cond_channels, channels * 2, 3, padding=1),
+        )
+        with th.no_grad():
+            last = self.conv[-1]
+            last.weight.zero_()
+            last.bias.zero_()
+
+    def forward(self, x, cond):
+        if cond.shape[-2:] != x.shape[-2:]:
+            cond = F.interpolate(
+                cond, size=x.shape[-2:], mode="bilinear", align_corners=False
+            )
+        scale_shift = self.conv(cond)
+        scale, shift = th.chunk(scale_shift, 2, dim=1)
+        h = self.norm(x)
+        return h * (1 + scale) + shift
+
+
+class ConditionEncoder(nn.Module):
+    def __init__(self, in_channels=3, base_channels=64, channel_mult=(1, 2, 4, 8)):
+        super().__init__()
+        self.channel_mult = channel_mult
+        self.in_conv = conv_nd(
+            2, in_channels, base_channels * channel_mult[0], 3, padding=1
+        )
+
+        self.level_blocks = nn.ModuleList()
+        self.downs = nn.ModuleList()
+
+        ch = base_channels * channel_mult[0]
+        for i, mult in enumerate(channel_mult):
+            ch = base_channels * mult
+            self.level_blocks.append(
+                nn.Sequential(
+                    conv_nd(2, ch, ch, 3, padding=1),
+                    SiLU(),
+                    conv_nd(2, ch, ch, 3, padding=1),
+                    SiLU(),
+                )
+            )
+            if i < len(channel_mult) - 1:
+                next_ch = base_channels * channel_mult[i + 1]
+                self.downs.append(
+                    conv_nd(2, ch, next_ch, 3, stride=2, padding=1)
+                )
+
+    def forward(self, x):
+        feats = []
+        h = self.in_conv(x)
+        for i, block in enumerate(self.level_blocks):
+            h = block(h)
+            feats.append(h)
+            if i < len(self.downs):
+                h = self.downs[i](h)
+        return feats
+
+
+class SuperResModelImproved(UNetModel):
+    def __init__(
+        self,
+        in_channels,
+        model_channels,
+        out_channels,
+        num_res_blocks,
+        attention_resolutions,
+        dropout=0,
+        channel_mult=(1, 2, 4, 8),
+        conv_resample=True,
+        dims=2,
+        use_checkpoint=False,
+        num_heads=1,
+        num_heads_upsample=-1,
+        use_scale_shift_norm=False,
+        scale_factor=4,
+    ):
+        self.cond_in_channels = in_channels
+        self.scale_factor = scale_factor
+
+        super().__init__(
+            in_channels * 2,
+            model_channels,
+            out_channels,
+            num_res_blocks,
+            attention_resolutions,
+            dropout=dropout,
+            channel_mult=channel_mult,
+            conv_resample=conv_resample,
+            dims=dims,
+            num_classes=None,
+            use_checkpoint=use_checkpoint,
+            num_heads=num_heads,
+            num_heads_upsample=num_heads_upsample,
+            use_scale_shift_norm=use_scale_shift_norm,
+        )
+
+        self.upsampler = PixelShuffleUpsampler(
+            in_channels, in_channels, scale_factor=scale_factor
+        )
+        self.cond_encoder = ConditionEncoder(
+            in_channels=in_channels,
+            base_channels=model_channels,
+            channel_mult=channel_mult,
+        )
+
+        self.sft_enc = nn.ModuleList(
+            [SFTLayer(model_channels * m, model_channels * m) for m in channel_mult]
+        )
+        self.sft_middle = SFTLayer(
+            model_channels * channel_mult[-1], model_channels * channel_mult[-1]
+        )
+
+    def forward(self, x, timesteps, low_res=None, **kwargs):
+        assert low_res is not None
+    
+        base_sr = self.upsampler(low_res)        
+        x_in = th.cat([x, base_sr], dim=1)       
+    
+        cond_feats = self.cond_encoder(low_res)    
+    
+        emb = self.time_embed(timestep_embedding(timesteps, self.model_channels))
+    
+        h = x_in.type(self.inner_dtype)
+        hs = []
+    
+        h = self.input_blocks[0](h, emb)
+        hs.append(h)
+        block_idx = 1
+    
+        for level, mult in enumerate(self.channel_mult):
+
+            for rb in range(self.num_res_blocks):
+                h = self.input_blocks[block_idx](h, emb)
+                block_idx += 1
+    
+                if rb == self.num_res_blocks - 1:
+                    h = self.sft_enc[level](h, cond_feats[level])
+    
+                hs.append(h)
+    
+            if level != len(self.channel_mult) - 1:
+                h = self.input_blocks[block_idx](h, emb) 
+                block_idx += 1
+                hs.append(h)
+    
+        h = self.middle_block(h, emb)
+        h = self.sft_middle(h, cond_feats[-1])
+    
+        for module in self.output_blocks:
+            cat_in = th.cat([h, hs.pop()], dim=1)
+            h = module(cat_in, emb)
+    
+        h = h.type(x.dtype)
+        return self.out(h)
+    
+    
+    

@@ -1,0 +1,31 @@
+data_dir: /root/Shelvin/improved-diffusion/data/DIV2K/HR/train
+lr_data_dir: /root/Shelvin/improved-diffusion/data/DIV2K/LR/train
+
+val_data_dir: /root/Shelvin/improved-diffusion/data/DIV2K/HR/valid
+val_lr_data_dir: /root/Shelvin/improved-diffusion/data/DIV2K/LR/valid
+
+large_size: 512
+small_size: 128
+num_channels: 128
+num_res_blocks: 5
+diffusion_steps: 200
+noise_schedule: "linear"
+class_cond: false
+
+batch_size: 1
+lr: 1e-4       
+weight_decay: 0.0
+ema_rate: 0.995
+schedule_sampler: "uniform"
+
+total_steps: 20000
+warmup_steps: 500
+lr_decay_steps: 2500  
+lr_gamma: 0.5
+
+log_interval: 1000
+save_interval: 5000
+eval_interval: 1000
+eval_num_batches: 5
+
+out_dir: "./sr_runs/div2k_x4_original"

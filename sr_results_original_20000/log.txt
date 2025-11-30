@@ -1,0 +1,6 @@
+Logging to ./sr_results_original_20000
+Using device: cuda:0
+Found 30 LR images in data/DIV2K/LR/valid/X4
+small_size=128, large_size=512
+Saving SR images to ./sr_results_original_20000
+Done! All SR images are saved.
