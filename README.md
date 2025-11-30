@@ -15,7 +15,7 @@ We build on OpenAI's improved-diffusion repo and extend the SR branch with:
 
 Architecture overview:
 
-![Our SR architecture](figs/ours_msft_arch.png)   <!-- replace with your actual file name -->
+![Our SR architecture](figs/image.png)  
 
 ---
 
@@ -55,7 +55,7 @@ If that fails, you can manually create an env and then install PyTorch + deps:
 Without conda, you can do:
 
     python -m venv venv
-    source venv/bin/activate          # Windows: venv\Scripts\activate
+    source venv/bin/activate         
     pip install -r requirements.txt
 
 Make sure to install a compatible PyTorch wheel from https://pytorch.org/ if you want GPU support.
@@ -74,13 +74,13 @@ Expected layout (you can change in the config):
           train/
           valid/
         LR/
-          train/
-          valid/
+          train/X4
+          valid/X4
 
 In `configs/sr_div2k_x4.yaml` set:
 
 - `data_dir`        → HR train (e.g. ./data/DIV2K/HR/train)
-- `lr_data_dir`     → LR train (e.g. ./data/DIV2K/LR/train)
+- `lr_data_dir`     → LR train (e.g. ./data/DIV2K/LR/train/X4)
 - `val_data_dir`    → HR valid
 - `val_lr_data_dir` → LR valid
 
