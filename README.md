@@ -120,17 +120,8 @@ We provide pretrained EMA checkpoints on DIV2K for quick testing.
 
 Download from Google Drive:
 
-    https://drive.google.com/xxxxxxxxxxxxxxxx      <-- REPLACE with your real link
+    https://drive.google.com/drive/u/0/folders/1IUuDXxsC-xYS0m3xc750P0zOc5UqZTdc    
 
-Example usage (improved model):
-
-    python scripts/sr_infer_improved.py \
-        --config configs/sr_div2k_x4.yaml \
-        --model_path path/to/downloaded_ema_checkpoint.pt \
-        --input path/to/lr.png \
-        --output path/to/sr_improved.png
-
-Baseline inference is analogous u
 
 ## 6. Inference Images
 ### 6.1 Inference Images with IDDPM SR
