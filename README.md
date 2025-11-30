@@ -114,7 +114,9 @@ Training logs and metrics (PSNR, SSIM, LPIPS, NIQE, CLIPIQA, MUSIQ, PI) are writ
 
 ---
 
-## 5. Pretrained Checkpoints
+## 5. Pretrained Checkpoints & logs
+All the logs have provided in the repo, you can see in 
+    /root/autodl-tmp/Shelvin/improved-diffusion/sr_runs
 
 We provide pretrained EMA checkpoints on DIV2K for quick testing.
 
