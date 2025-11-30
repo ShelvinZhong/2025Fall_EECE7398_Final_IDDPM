@@ -111,8 +111,6 @@ Training logs and metrics (PSNR, SSIM, LPIPS, NIQE, CLIPIQA, MUSIQ, PI) are writ
       div2k_x4_original/
       div2k_x4_MSFI/
       div2k_x4_MFSI_SFT/
-    sr_results_original_20000/
-    sr_improved_results_improved_20000/
 
 ---
 
@@ -133,3 +131,22 @@ Example usage (improved model):
         --output path/to/sr_improved.png
 
 Baseline inference is analogous u
+
+## 6. Inference Images
+### 6.1 Inference Images with IDDPM SR
+
+python scripts/sr_infer.py \
+  --config configs/sr_div2k_x4.yaml \
+  --model_path .pt \ # IDDPM SR pt Path
+  --lr_dir data/DIV2K/LR/valid/X4 \
+  --out_dir ./results \ # Your output path
+  --num_images 30 # 0 means all images in the folder
+
+### 6.2 Inference Images with SR model (ours)
+
+python scripts/sr_infer_improved.py \
+  --config configs/sr_div2k_x4.yaml \
+  --model_path .pt \ # Our SR model pt Path
+  --lr_dir data/DIV2K/LR/valid/X4 \
+  --out_dir ./results \ # Your output path
+  --num_images 30 # 0 means all images in the folder
